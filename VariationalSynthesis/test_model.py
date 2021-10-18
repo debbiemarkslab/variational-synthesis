@@ -22,7 +22,7 @@ def estimate_cross_cov(x):
 @pytest.mark.parametrize('K', [2, 3])
 @pytest.mark.parametrize('C', [2, 5])
 @pytest.mark.parametrize('L', [6, 8])
-@pytest.mark.parametrize('assembly', ['combinatorial', 'deterministic'])
+@pytest.mark.parametrize('assembly', ['combinatorial', 'fixed'])
 @pytest.mark.parametrize('alph_unit', ['nuc', 'codon'])
 @pytest.mark.parametrize('alph_constraint',
                          ['enzymatic', 'finite', 'arbitrary'])

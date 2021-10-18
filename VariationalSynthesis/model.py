@@ -18,20 +18,20 @@ from VariationalSynthesis import bio_utils as bu
 
 class SynthesisModel:
 
-    def __init__(self, K, C, Ls, assembly='deterministic', alph_unit='codon',
+    def __init__(self, K, M, Ls, assembly='fixed', alph_unit='codon',
                  alph_constraint='arbitrary', alphabet_size=None,
                  enzyme='mutazymeII', lr=0.01, grad_steps=5, tau_max=10,
                  epsilon=1e-300, pin_memory=False, cuda=False):
 
         self.K = K
-        self.C = C
+        self.M = M
         self.Ls = Ls
         self.L = sum(Ls)
         self.D = len(bu.alphabets['aa'])
         self.B = len(bu.alphabets['dna'])
         self.indx = [slice(sum(Ls[:j]), sum(Ls[:(j+1)]))
                      for j in range(len(Ls))]
-        assert assembly in ['deterministic', 'combinatorial']
+        assert assembly in ['fixed', 'combinatorial']
         self.assembly = assembly
         assert alph_unit in ['nuc', 'codon']
         self.alph_unit = alph_unit
@@ -117,7 +117,7 @@ class SynthesisModel:
         """Get marginals at each sequence of synthesis model."""
         with torch.no_grad():
             per_well_marg = torch.exp(self._make_c_marg_mat())
-            if self.assembly == 'deterministic':
+            if self.assembly == 'fixed':
                 return torch.einsum('cjd,c->jd',
                                     per_well_marg, self.params['w'])
             elif self.assembly == 'combinatorial':
@@ -135,7 +135,7 @@ class SynthesisModel:
             diag_ind = (torch.eye(per_well_marg.shape[1])[:, :, None, None] *
                         torch.eye(per_well_marg.shape[2])[None, None, :, :]
                         ).to(self.gen_device)
-            if self.assembly == 'deterministic':
+            if self.assembly == 'fixed':
                 total_marg = torch.einsum('cjd,c->jd', per_well_marg,
                                           self.params['w'])
                 indep_probs = torch.einsum('jd,ef->jedf', total_marg,
@@ -167,7 +167,7 @@ class SynthesisModel:
         """Sample from the synthesis model."""
         with torch.no_grad():
             per_well_marg = torch.exp(self._make_c_marg_mat())
-            if self.assembly == 'deterministic':
+            if self.assembly == 'fixed':
                 well_dists = [torch.distributions.OneHotCategorical(ps)
                               for ps in per_well_marg]
                 ws_dist = torch.distributions.Multinomial(n, self.params['w'])
@@ -195,7 +195,7 @@ class SynthesisModel:
         """Get log probabilities for sequences x"""
         with torch.no_grad():
             alpha = self._make_alpha(x)
-            if self.assembly == 'deterministic':
+            if self.assembly == 'fixed':
                 rtilde = (torch.sum(alpha, axis=2) +
                           torch.log(self.params['w'] + self.epsilon)[None, :])
                 rtilde_norm = torch.logsumexp(rtilde, axis=1)
@@ -220,7 +220,7 @@ class SynthesisModel:
         """E step in EM algorithm."""
         with torch.no_grad():
             alpha = self._make_alpha(x)
-            if self.assembly == 'deterministic':
+            if self.assembly == 'fixed':
                 rtilde = (torch.sum(alpha, axis=2) +
                           torch.log(self.params['w'] + self.epsilon)[None, :])
                 rtilde_norm = torch.logsumexp(rtilde, axis=1, keepdim=True)
@@ -230,8 +230,8 @@ class SynthesisModel:
                 rxmn = torch.einsum('ic,ijd->cjd', r, x) / x.shape[0]
             elif self.assembly == 'combinatorial':
                 logp = torch.tensor(0.)
-                r = torch.zeros([x.shape[0], self.C, self.K])
-                rxmn = torch.zeros([self.C, self.K, self.L, self.D])
+                r = torch.zeros([x.shape[0], self.M, self.K])
+                rxmn = torch.zeros([self.M, self.K, self.L, self.D])
                 for k in range(self.K):
                     rtilde = (torch.sum(alpha[:, :, self.indx[k]], axis=2) +
                               torch.log(self.params['w']
@@ -256,7 +256,7 @@ class SynthesisModel:
         # u parameter.
         dtype = self.params['w'].dtype
         if self.alph_constraint == 'arbitrary' and self.alph_unit == 'codon':
-            if self.assembly == 'deterministic':
+            if self.assembly == 'fixed':
                 utilde = torch.log(self.params['rxmn'] + self.epsilon)
                 self.params['uln'] = (
                         utilde - torch.logsumexp(utilde, axis=2, keepdim=True))
@@ -267,7 +267,7 @@ class SynthesisModel:
                     self.params['uln'][:, self.indx[k], :] = (
                         utilde - torch.logsumexp(utilde, axis=2, keepdim=True))
         elif self.alph_constraint == 'finite' and self.alph_unit == 'codon':
-            if self.assembly == 'deterministic':
+            if self.assembly == 'fixed':
                 amax = torch.argmax(
                     torch.einsum('ad,cjd->cja', self.params['vln'],
                                  self.params['rxmn']), axis=2, keepdim=True)
@@ -306,7 +306,7 @@ class SynthesisModel:
                 aa_lp = bu.codon_to_aa_lp(torch.einsum('nla,ab->nlb',
                                                        self.rho, vln),
                                           self.transfer, self.mask)
-                if self.assembly == 'deterministic':
+                if self.assembly == 'fixed':
                     rxlp = torch.einsum('nd,cjd->cjn', aa_lp,
                                         self.params['rxmn'])
                     amax = torch.argmax(rxlp, axis=2, keepdim=True)
@@ -334,7 +334,7 @@ class SynthesisModel:
                     nuc_lp = torch.einsum('cjla,ab->cjlb', self.params['xt'],
                                           vln)
                     aa_lp = bu.codon_to_aa_lp(nuc_lp, self.transfer, self.mask)
-                    if self.assembly == 'deterministic':
+                    if self.assembly == 'fixed':
                         loss = -torch.sum(aa_lp * self.params['rxmn'])
                     elif self.assembly == 'combinatorial':
                         loss = torch.tensor(0.)
@@ -351,7 +351,7 @@ class SynthesisModel:
                     nuc_lp = torch.einsum('cjla,ab->cjlb', self.params['xt'],
                                           self.Stauln[t])
                     aa_lp = bu.codon_to_aa_lp(nuc_lp, self.transfer, self.mask)
-                    if self.assembly == 'deterministic':
+                    if self.assembly == 'fixed':
                         t_Elp[t] = torch.einsum('cjd,cjd->', aa_lp,
                                                 self.params['rxmn'])
                     elif self.assembly == 'combinatorial':
@@ -365,19 +365,19 @@ class SynthesisModel:
         """Initialize EM parameters."""
         N = x.shape[0]
         if self.alph_constraint == 'arbitrary' and self.alph_unit == 'codon':
-            utilde = torch.randn((self.C, self.L, self.D))
+            utilde = torch.randn((self.M, self.L, self.D))
             self.params['uln'] = utilde - torch.logsumexp(
                     utilde, axis=2, keepdim=True)
         elif self.alph_constraint == 'finite' and self.alph_unit == 'codon':
             self.params['xt'] = OneHotCategorical(
-                probs=(1/self.A)*torch.ones(self.A)).sample((self.C, self.L))
+                probs=(1/self.A)*torch.ones(self.A)).sample((self.M, self.L))
             vtilde = torch.randn((self.A, self.D))
             self.params['vln'] = (
                 vtilde - torch.logsumexp(vtilde, axis=1, keepdim=True))
         elif self.alph_constraint == 'finite' and self.alph_unit == 'nuc':
             self.params['xt'] = OneHotCategorical(
                 probs=(1/self.A)*torch.ones(self.A)
-                ).sample((self.C, self.L, 3))
+                ).sample((self.M, self.L, 3))
             self.params['vtilde'] = torch.randn((self.A, self.B),
                                                 requires_grad=True)
             self.optimizer = optim.Adam([self.params['vtilde']], lr=self.lr)
@@ -385,7 +385,7 @@ class SynthesisModel:
             # Get device.
             device = torch.tensor(1.).device
             # Initialize cluster means with subsample of data
-            xsub = x[torch.randperm(N)[:self.C]].clone().to(device)
+            xsub = x[torch.randperm(N)[:self.M]].clone().to(device)
             # Probability of each codon.
             collapse_codon = torch.sum(self.transfer, axis=(0, 1))
             codon_to_aa_prob = collapse_codon / torch.sum(collapse_codon,
@@ -403,10 +403,10 @@ class SynthesisModel:
             self.params['tau'] = 5
 
         # Initialize mixture component weights.
-        if self.assembly == 'deterministic':
-            self.params['w'] = (1/self.C) * torch.ones(self.C)
+        if self.assembly == 'fixed':
+            self.params['w'] = (1/self.M) * torch.ones(self.M)
         elif self.assembly == 'combinatorial':
-            self.params['w'] = (1/self.C) * torch.ones((self.C, self.K))
+            self.params['w'] = (1/self.M) * torch.ones((self.M, self.K))
 
         # Initialize summary statistics.
         self.params['rmn'] = None
@@ -512,7 +512,7 @@ def main(config):
         device = torch.device('cuda')
     include_stop = config['general']['include_stop'] == 'True'
 
-    noligos = int(config['model']['noligos'])
+    ntemplates = int(config['model']['ntemplates'])
     npools = int(config['model']['npools'])
     assembly = config['model']['assembly']
     unit = config['model']['unit']
@@ -548,13 +548,13 @@ def main(config):
 
     # Construct model.
     K = npools
-    C = noligos
+    M = ntemplates
     L = dataset.max_length
     # split evenly for now.
     Ls = [len(elem) for elem in torch.split(torch.arange(L),
                                             torch.ceil(torch.tensor(L/K)))]
     model = SynthesisModel(
-               K, C, Ls, assembly=assembly, alph_unit=unit,
+               K, M, Ls, assembly=assembly, alph_unit=unit,
                alph_constraint=constraint,
                alphabet_size=alph_size, enzyme=enzyme,
                lr=lr, grad_steps=grad_steps,
