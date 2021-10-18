@@ -506,7 +506,7 @@ def main(config):
         torch.set_default_dtype(torch.float64)
         pin_memory = False
     cpu_data = config['general']['cpu_data'] == 'True'
-    if cpu_data or not args.cuda:
+    if cpu_data or not cuda:
         device = torch.device('cpu')
     else:
         device = torch.device('cuda')
