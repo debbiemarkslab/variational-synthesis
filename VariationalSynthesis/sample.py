@@ -6,8 +6,8 @@ import pickle
 import torch
 
 from pyro.contrib.mue.dataloaders import write
-from StochSynthSample.synthesis import bio_utils as bu
-from StochSynthSample.synthesis.model import SynthesisModel
+from VariationalSynthesis import bio_utils as bu
+from VariationalSynthesis.model import SynthesisModel
 
 
 def main(config, args):

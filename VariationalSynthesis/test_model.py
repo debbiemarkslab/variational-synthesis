@@ -4,14 +4,19 @@ import torch
 
 from pyro.contrib.mue.dataloaders import BiosequenceDataset, alphabets
 
-from StochSynthSample.synthesis.model import SynthesisModel, bu
-from StochSynthSample.synthesis.moment_comparison import estimate_cross_cov
-
-import pdb
+from VariationalSynthesis.model import SynthesisModel, bu
 
 
 def test_alphabet():
     assert ''.join(alphabets['amino-acid']) == ''.join(bu.alphabets['aa'])[:20]
+
+
+def estimate_cross_cov(x):
+    """Estimate cross covariance matrix from data."""
+    xmn = x.mean(0)
+    cov = (torch.einsum('ijd,ief->jedf', x, x)/x.shape[0]
+           - torch.einsum('jd,ef->jedf', xmn, xmn))
+    return torch.sqrt(torch.square(cov).sum((2, 3)))
 
 
 @pytest.mark.parametrize('K', [2, 3])

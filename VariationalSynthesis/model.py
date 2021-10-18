@@ -13,9 +13,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 
 from pyro.contrib.mue.dataloaders import BiosequenceDataset
-from StochSynthSample.synthesis import bio_utils as bu
-
-import pdb
+from VariationalSynthesis import bio_utils as bu
 
 
 class SynthesisModel:

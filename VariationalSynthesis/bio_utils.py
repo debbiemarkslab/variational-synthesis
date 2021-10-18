@@ -1,7 +1,5 @@
 import numpy as np
-from scipy.special import logsumexp
 import torch
-import pdb
 
 # --- Fixed constants. ---
 # Amino acid and dna alphabets. aa in same order as pyro dataloader.
