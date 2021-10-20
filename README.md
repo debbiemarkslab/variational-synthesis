@@ -2,8 +2,6 @@
 This repo provides example code implementing variational synthesis, as introduced in the paper
 
 > Optimal Design of Stochastic DNA Synthesis Protocols based on Generative Sequence Models
-> Eli N. Weinstein, Alan N. Amin,  Will Grathwohl, Daniel Kassler, Jean Disset, Debora S. Marks
-> 2021
 
 ![Figure 1](overview.png)
 
